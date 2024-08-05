@@ -6,9 +6,12 @@ import (
 	"os"
 	"strings"
 
+	"golang_tui/config"
+
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/crypto/ssh"
 )
 
 const listHeight = 14
@@ -20,6 +23,7 @@ var (
 	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
 	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
 	quitTextStyle     = lipgloss.NewStyle().Margin(1, 0, 2, 4).Foreground(lipgloss.Color("#FF06B7"))
+	cfg               config.Config
 )
 
 type item string
@@ -50,9 +54,10 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 }
 
 type model struct {
-	list     list.Model
-	choice   string
-	quitting bool
+	list       list.Model
+	choice     string
+	quitting   bool
+	sshMessage string
 }
 
 func (m model) Init() tea.Cmd {
@@ -75,16 +80,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			i, ok := m.list.SelectedItem().(item)
 			if ok {
 				m.choice = string(i)
+				m.list.Title = "Opción seleccionada: " + m.choice
+
+				switch m.choice {
+				case "Limpiar cashe de los servidores FLR":
+					m.sshMessage = sshConnect(cfg.SSHUser, cfg.SSHPassword, cfg.ServerFLR)
+				case "Limpiar cashe de los servidores SBS":
+					m.sshMessage = sshConnect(cfg.SSHUser, cfg.SSHPassword, cfg.ServerSBS)
+				case "Buscar tarea en el server de FLR":
+					m.sshMessage = sshConnect(cfg.SSHUser, cfg.SSHPassword, cfg.ServerFLR)
+				}
 			}
-			switch m.choice {
-			case "Limpiar cashe de los servidores FLR":
-				fmt.Println("FLR")
-			case "Limpiar cashe de los servidores SBS":
-				fmt.Println("SBS")
-			case "Buscar tarea en el server de FLR":
-				fmt.Println("")
-			}
-			return m, tea.Quit
+			return m, nil
 		}
 	}
 
@@ -97,16 +104,18 @@ func (m model) View() string {
 	if m.quitting {
 		return quitTextStyle.Render("Que tengas un buen turno!")
 	}
-	return "\n" + m.list.View()
+	return "\n" + m.list.View() + "\n" + titleStyle.Render(m.sshMessage)
 }
 
 func main() {
+	cfg = config.LoadConfig()
+
 	items := []list.Item{
 		item("Limpiar cashe de los servidores FLR"),
 		item("Limpiar cashe de los servidores SBS"),
 		item("Buscar tarea en el server de FLR"),
-		item("Cancelar tareas Pick"),
-		item("Cancelar tareas de Put"),
+		// item("Cancelar tareas Pick"),
+		// item("Cancelar tareas de Put"),
 	}
 
 	const defaultWidth = 20
@@ -125,4 +134,22 @@ func main() {
 		fmt.Println("Error corriendo el programa:", err)
 		os.Exit(1)
 	}
+}
+
+func sshConnect(user, password, host string) string {
+	config := &ssh.ClientConfig{
+		User: user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	client, err := ssh.Dial("tcp", host+":22", config)
+	if err != nil {
+		return fmt.Sprintf("Error conectando a %s: %v", host, err)
+	}
+	defer client.Close()
+
+	return fmt.Sprintf("Conexión exitosa a %s", host)
 }
