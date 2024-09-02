@@ -1,4 +1,3 @@
-// utils.go
 package utils
 
 import (
@@ -7,35 +6,45 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
+	"sync"
 )
 
 type ServersIP []string
 
-// PingServer realiza un mapeo de la lista de servidores y manda un ping a cada uno, retorna la respuesta de cada uno.
-func pingServer(ip string) {
+// PingServer realiza un ping a una IP específica y envía el resultado a un canal.
+func pingServer(ip string, wg *sync.WaitGroup, results chan<- string) {
+	defer wg.Done()
 
 	var cmd *exec.Cmd
 
 	// Ajustar el comando según el sistema operativo
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("ping", "-n", "4", ip) // Windows usa -n para el número de paquetes
+		cmd = exec.Command("ping", "-n", "1", ip) // Windows usa -n para el número de paquetes
 	case "linux", "darwin":
-		cmd = exec.Command("ping", "-c", "4", ip) // Linux y macOS usan -c para el número de paquetes
+		cmd = exec.Command("ping", "-c", "1", ip) // Linux y macOS usan -c para el número de paquetes
 	default:
-		fmt.Printf("Sistema operativo no soportado\n")
+		results <- fmt.Sprintf("Sistema operativo no soportado para %s", ip)
 		return
 	}
 
 	// Ejecuta el comando ping en la IP especificada
 	out, err := cmd.Output()
 	if err != nil {
-		fmt.Printf("Error al hacer ping a %s: %v\n", ip, err)
+		results <- fmt.Sprintf("Servidor %s: no está corriendo", ip)
 		return
 	}
-	fmt.Printf("Respuesta de %s:\n%s\n", ip, string(out))
+
+	// Analiza la salida para verificar si el ping fue exitoso
+	if strings.Contains(string(out), "1 received") || strings.Contains(string(out), "TTL=") {
+		results <- fmt.Sprintf("Servidor %s: corriendo", ip)
+	} else {
+		results <- fmt.Sprintf("Servidor %s: no está corriendo", ip)
+	}
 }
 
+// PingServers ejecuta pings a todas las IPs en paralelo y muestra los resultados.
 func PingServers() {
 	cfg := config.LoadConfig()
 	serversIP := ServersIP{
@@ -48,8 +57,25 @@ func PingServers() {
 		cfg.FLR_METRICS,
 		cfg.FLR_OPC,
 	}
+
+	var wg sync.WaitGroup
+	results := make(chan string, len(serversIP))
+
+	// Inicia una goroutine para cada IP en la lista
 	for _, ip := range serversIP {
-		pingServer(ip)
+		wg.Add(1)
+		go pingServer(ip, &wg, results)
+	}
+
+	// Cierra el canal una vez que todas las goroutines hayan terminado
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Recoge y muestra los resultados de las goroutines
+	for result := range results {
+		fmt.Println(result)
 	}
 }
 
