@@ -2,12 +2,13 @@ package sshclient
 
 import (
 	"fmt"
+	"golang_tui/config"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 )
 
-func Conexion_ssh(user, password, ip string) error {
+func ConexionSSH(user, password, ip, command string) error {
 	config := &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{
@@ -32,11 +33,7 @@ func Conexion_ssh(user, password, ip string) error {
 	}
 	defer session.Close()
 
-	// Conectar stdin, stdout, stderr para la sesión
-	stdin, err := session.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("no se pudo conectar stdin: %w", err)
-	}
+	// Conectar stdout y stderr para la sesión
 	stdout, err := session.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("no se pudo conectar stdout: %w", err)
@@ -46,38 +43,60 @@ func Conexion_ssh(user, password, ip string) error {
 		return fmt.Errorf("no se pudo conectar stderr: %w", err)
 	}
 
-	// Empezar una sesión tipo shell
-	if err := session.Shell(); err != nil {
-		return fmt.Errorf("fallo al iniciar el shell: %w", err)
+	// Ejecutar el comando para limpiar caché
+	if err := session.Run(command); err != nil {
+		return fmt.Errorf("fallo al ejecutar el comando: %w", err)
 	}
-
-	// Ejecutar los comandos
-	// Ejecutar todos los comandos dentro de sudo con -S y -p para la contraseña
-	commands := []string{
-		fmt.Sprintf("echo '%s' | sudo -S -p '' bash -c 'free -m && sync && echo 3 > /proc/sys/vm/drop_caches && free -m'", password),
-	}
-
-	for _, cmd := range commands {
-		fmt.Fprintln(stdin, cmd)
-	}
-
-	// Cerrar stdin para indicar el fin de los comandos
-	stdin.Close()
-
-	// Esperar a que termine la sesión
-	session.Wait()
 
 	// Leer la salida de stdout
 	buf := make([]byte, 1024)
 	n, _ := stdout.Read(buf)
-	fmt.Printf("Output: %s\n", buf[:n])
+	fmt.Printf("Output del servidor %s: %s\n", ip, buf[:n])
 
 	// Leer la salida de stderr
 	errBuf := make([]byte, 1024)
 	nErr, _ := stderr.Read(errBuf)
 	if nErr > 0 {
-		fmt.Printf("Error output: %s\n", errBuf[:nErr])
+		fmt.Printf("Error output del servidor %s: %s\n", ip, errBuf[:nErr])
 	}
 
 	return nil
+}
+
+// ClearCacheOnServers recorre una lista de IPs y ejecuta el comando para limpiar la caché en cada uno.
+func ClearCacheOnServersFLR() {
+	cfg := config.LoadConfig()
+	serversIP := []string{
+		cfg.FLRApp,
+		cfg.FLR_DB,
+		cfg.FLR_METRICS,
+		cfg.FLR_OPC,
+		cfg.FLR_FM,
+	}
+
+	command := "echo '" + cfg.PASSWORD + "' | sudo -S -p '' bash -c 'free -m && sync && echo 3 > /proc/sys/vm/drop_caches && free -m'"
+
+	for _, ip := range serversIP {
+		if err := ConexionSSH(cfg.SSHUser, cfg.PASSWORD, ip, command); err != nil {
+			fmt.Printf("Error en el servidor %s: %v\n", ip, err)
+		}
+	}
+}
+
+func ClearCacheOnServersSBS() {
+	cfg := config.LoadConfig()
+	serversIP := []string{
+		cfg.SBS_PUPPET,
+		cfg.SBS_INTERFACE,
+		cfg.SBS_CORE,
+		cfg.SBS_PLATFORM,
+	}
+
+	command := "echo '" + cfg.SBS_PASSWORD + "' | sudo -S -p '' bash -c 'free -m && sync && echo 3 > /proc/sys/vm/drop_caches && free -m'"
+
+	for _, ip := range serversIP {
+		if err := ConexionSSH(cfg.SSHUser, cfg.SBS_PASSWORD, ip, command); err != nil {
+			fmt.Printf("Error en el servidor %s: %v\n", ip, err)
+		}
+	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"golang_tui/sshclient"
 	"golang_tui/utils"
 	"io"
 	"os"
@@ -79,10 +80,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			switch m.choice {
 			case "Limpiar cashe de los servidores FLR":
-				fmt.Println("FLR")
+				fmt.Println("Limpiando caché de los servidores FLR...")
+				sshclient.ClearCacheOnServersFLR()
 			case "Limpiar cashe de los servidores SBS":
-				fmt.Println("SBS")
+				fmt.Println("Limpiando caché de los servidores SBS...")
+				sshclient.ClearCacheOnServersSBS()
 			case "Comprobar que los servidores esten corriendo":
+				fmt.Println("Realizando un ping a los servidores...")
 				utils.PingServers()
 			}
 			return m, tea.Quit

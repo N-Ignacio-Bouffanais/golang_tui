@@ -51,11 +51,12 @@ func PingServers() {
 		cfg.SBS_PUPPET,    // SBS_PUPPET
 		cfg.SBS_INTERFACE, // SBS_INTERFACE
 		cfg.SBS_CORE,      // SBS_CORE
-		cfg.SBS_BRIGDE,    // SBS_BRIGDE
+		cfg.SBS_PLATFORM,  // SBS_PLATFORM
 		cfg.FLRApp,
 		cfg.FLR_DB,
 		cfg.FLR_METRICS,
 		cfg.FLR_OPC,
+		cfg.FLR_FM,
 	}
 
 	var wg sync.WaitGroup
