@@ -48,10 +48,15 @@ func pingServer(ip string, wg *sync.WaitGroup, results chan<- string) {
 func PingServers() {
 	cfg := config.LoadConfig()
 	serversIP := ServersIP{
-		cfg.SBS_PUPPET,    // SBS_PUPPET
-		cfg.SBS_INTERFACE, // SBS_INTERFACE
-		cfg.SBS_CORE,      // SBS_CORE
-		cfg.SBS_PLATFORM,  // SBS_PLATFORM
+		cfg.SBS_PUPPET,
+		cfg.SBS_INTERFACE,
+		cfg.SBS_CORE,
+		cfg.SBS_PLATFORM_API,
+		cfg.SBS_PLATFORM_CORE,
+		cfg.SBS_PLATFORM_DB,
+		cfg.SBS_METRICS,
+		cfg.SBS_STAGING,
+		cfg.SBS_OPC,
 		cfg.FLRApp,
 		cfg.FLR_DB,
 		cfg.FLR_METRICS,

@@ -89,7 +89,10 @@ func ClearCacheOnServersSBS() {
 		cfg.SBS_PUPPET,
 		cfg.SBS_INTERFACE,
 		cfg.SBS_CORE,
-		cfg.SBS_PLATFORM,
+		cfg.SBS_PLATFORM_API,
+		cfg.SBS_PLATFORM_CORE,
+		cfg.SBS_PLATFORM_DB,
+		cfg.SBS_METRICS,
 	}
 
 	command := "echo '" + cfg.SBS_PASSWORD + "' | sudo -S -p '' bash -c 'free -m && sync && echo 3 > /proc/sys/vm/drop_caches && free -m'"
@@ -97,6 +100,27 @@ func ClearCacheOnServersSBS() {
 	for _, ip := range serversIP {
 		if err := ConexionSSH(cfg.SSHUser, cfg.SBS_PASSWORD, ip, command); err != nil {
 			fmt.Printf("Error en el servidor %s: %v\n", ip, err)
+		}
+	}
+}
+
+func ClearCacheOnStaging() {
+	cfg := config.LoadConfig()
+	sbsIP := []string{
+		cfg.SBS_STAGING,
+	}
+
+	commands := `
+		free -m && sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches && free -m
+	`
+
+	for _, ip := range sbsIP {
+		// Cambiamos el usuario a 'gor' y usamos el nuevo comando
+		// Ejecutar el comando
+		if err := ConexionSSH("gor", cfg.PASSWORD, ip, commands); err != nil {
+			fmt.Printf("Error en el servidor %s: %v\n", ip, err)
+		} else {
+			fmt.Printf("Comando ejecutado exitosamente en el servidor %s\n", ip)
 		}
 	}
 }
