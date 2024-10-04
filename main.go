@@ -83,10 +83,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				fmt.Println("Limpiando caché de los servidores FLR...")
 				sshclient.ClearCacheOnServersFLR()
 			case "Limpiar cashe de los servidores SBS":
-				// fmt.Println("Limpiando caché de los servidores SBS...")
-				// sshclient.ClearCacheOnServersSBS()
-				fmt.Println("Limpiando caché de los servidores SBS2...")
+				fmt.Println("Limpiando caché de los servidores SBS...")
+				sshclient.ClearCacheOnServersSBS()
 				sshclient.ClearCacheOnStaging()
+				sshclient.ClearCacheSbs3()
 			case "Comprobar que los servidores esten corriendo":
 				fmt.Println("Realizando un ping a los servidores...")
 				utils.PingServers()
