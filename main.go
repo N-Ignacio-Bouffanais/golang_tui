@@ -6,6 +6,7 @@ import (
 	"golang_tui/utils"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -52,46 +53,93 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 }
 
 type model struct {
-	list     list.Model
-	choice   string
-	quitting bool
+	list          list.Model
+	choice        string
+	quitting      bool
+	step          int
+	ppsNumber     string // Almacenará el número de PPS ingresado
+	newQueue      string // Almacenará el número de la nueva cola
+	inputField    string // Campo de entrada interactiva
+	collectingPPS bool   // Indicador de si estamos ingresando el PPS
+	collectingQ   bool   // Indicador de si estamos ingresando la nueva cola
 }
 
-func (m model) Init() tea.Cmd {
+func (m *model) Init() tea.Cmd {
 	return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
 		return m, nil
 
 	case tea.KeyMsg:
-		switch keypress := msg.String(); keypress {
-		case "q", "ctrl+c":
+		switch keypress := msg.String(); {
+		case keypress == "q" || keypress == "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
 
-		case "enter":
-			i, ok := m.list.SelectedItem().(item)
-			if ok {
-				m.choice = string(i)
+		case keypress == "enter":
+			// Verifica el paso actual
+			if m.step == 0 {
+				// Seleccionando la opción principal
+				i, ok := m.list.SelectedItem().(item)
+				if ok {
+					m.choice = string(i)
+				}
+				switch m.choice {
+				case "Limpiar cashe de los servidores FLR":
+					fmt.Println("Limpiando caché de los servidores FLR...")
+					sshclient.ClearCacheOnServersFLR()
+				case "Limpiar cashe de los servidores SBS":
+					fmt.Println("Limpiando caché de los servidores SBS...")
+					sshclient.ClearCacheOnServersSBS()
+					sshclient.ClearCacheOnStaging()
+					sshclient.ClearCacheSbs3()
+				case "Comprobar que los servidores esten corriendo":
+					fmt.Println("Realizando un ping a los servidores...")
+					utils.PingServers()
+				case "Cambiar colas de pps":
+					m.step = 1
+					m.inputField = "" // Resetea el campo de entrada
+					m.collectingPPS = true
+				}
+			} else if m.collectingPPS {
+				// Confirmamos el número de PPS
+				m.ppsNumber = m.inputField
+				m.inputField = "" // Resetea el campo de entrada
+				m.collectingPPS = false
+				m.collectingQ = true
+				m.step = 2
+			} else if m.collectingQ {
+				// Confirmamos el número de la nueva cola
+				m.newQueue = m.inputField
+				m.collectingQ = false
+
+				// Ejecuta el comando curl con los datos ingresados
+				cmdStr := fmt.Sprintf("curl -X POST http://10.115.43.20:8181/api/mhs/configure_pps_queue_size/%s/%s -H 'Content-Type: application/json' -H 'cache-control: no-cache'", m.ppsNumber, m.newQueue)
+				fmt.Println("Ejecutando:", cmdStr)
+				cmd := exec.Command("bash", "-c", cmdStr)
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					fmt.Println("Error ejecutando el comando:", err)
+				} else {
+					fmt.Println("Resultado:", string(output))
+				}
+				m.step = 0 // Reinicia al paso inicial
+				return m, tea.Quit
 			}
-			switch m.choice {
-			case "Limpiar cashe de los servidores FLR":
-				fmt.Println("Limpiando caché de los servidores FLR...")
-				sshclient.ClearCacheOnServersFLR()
-			case "Limpiar cashe de los servidores SBS":
-				fmt.Println("Limpiando caché de los servidores SBS...")
-				sshclient.ClearCacheOnServersSBS()
-				sshclient.ClearCacheOnStaging()
-				sshclient.ClearCacheSbs3()
-			case "Comprobar que los servidores esten corriendo":
-				fmt.Println("Realizando un ping a los servidores...")
-				utils.PingServers()
+
+		case keypress == "backspace":
+			if len(m.inputField) > 0 {
+				m.inputField = m.inputField[:len(m.inputField)-1] // Elimina el último carácter
 			}
-			return m, tea.Quit
+
+		default:
+			if m.collectingPPS || m.collectingQ {
+				m.inputField += keypress // Añade la tecla al campo de entrada
+			}
 		}
 	}
 
@@ -100,11 +148,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) View() string {
+func (m *model) View() string {
 	if m.quitting {
 		return quitTextStyle.Render("Que tengas un buen turno maquina!")
 	}
-	return "\n" + m.list.View()
+	switch m.step {
+	case 1:
+		return titleStyle.Render("Que pps necesita cambiar?") + "\n" + m.inputField
+	case 2:
+		return titleStyle.Render(fmt.Sprintf("Ingrese la nueva cola de la pps %s:", m.ppsNumber)) + "\n" + m.inputField
+	default:
+		return "\n" + m.list.View()
+	}
 }
 
 func main() {
@@ -112,6 +167,8 @@ func main() {
 		item("Limpiar cashe de los servidores FLR"),
 		item("Limpiar cashe de los servidores SBS"),
 		item("Comprobar que los servidores esten corriendo"),
+		item("Cambiar colas de pps"),
+		item("Cambiar sector preference"),
 	}
 
 	const defaultWidth = 20
@@ -124,7 +181,7 @@ func main() {
 	l.Styles.PaginationStyle = paginationStyle
 	l.Styles.HelpStyle = helpStyle
 
-	m := model{list: l}
+	m := &model{list: l}
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {
 		fmt.Println("Error corriendo el programa:", err)
