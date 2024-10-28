@@ -127,7 +127,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					fmt.Println("Resultado:", string(output))
 				}
-				m.step = 0 // Reinicia al paso inicial
+				// m.step = 0 // Reinicia al paso inicial
 				return m, tea.Quit
 			}
 
@@ -168,7 +168,7 @@ func main() {
 		item("Limpiar cashe de los servidores SBS"),
 		item("Comprobar que los servidores esten corriendo"),
 		item("Cambiar colas de pps"),
-		item("Cambiar sector preference"),
+		//item("Cambiar sector preference"),
 	}
 
 	const defaultWidth = 20
