@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"golang_tui/config"
 	"golang_tui/sshclient"
 	"golang_tui/utils"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -117,17 +117,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.newQueue = m.inputField
 				m.collectingQ = false
 
-				// Ejecuta el comando curl con los datos ingresados
-				cmdStr := fmt.Sprintf("curl -X POST http://10.115.43.20:8181/api/mhs/configure_pps_queue_size/%s/%s -H 'Content-Type: application/json' -H 'cache-control: no-cache'", m.ppsNumber, m.newQueue)
-				fmt.Println("Ejecutando:", cmdStr)
-				cmd := exec.Command("bash", "-c", cmdStr)
-				output, err := cmd.CombinedOutput()
+				// Configuración de conexión y ejecución del comando curl remoto
+				cfg := config.LoadConfig()
+				err := sshclient.ExecuteRemoteCurl(cfg.SSHUser, cfg.PASSWORD, cfg.SBS_STAGING, m.ppsNumber, m.newQueue)
 				if err != nil {
-					fmt.Println("Error ejecutando el comando:", err)
-				} else {
-					fmt.Println("Resultado:", string(output))
+					fmt.Printf("Error al ejecutar el comando curl remoto: %v\n", err)
 				}
-				// m.step = 0 // Reinicia al paso inicial
 				return m, tea.Quit
 			}
 

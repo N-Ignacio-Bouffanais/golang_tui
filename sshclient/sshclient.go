@@ -8,6 +8,49 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+func ExecuteRemoteCurl(user, password, ip, ppsNumber, newQueue string) error {
+	// Configuración de la conexión SSH
+	config := &ssh.ClientConfig{
+		User: user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // Para desarrollo, no usar en producción
+		Timeout:         5 * time.Second,
+	}
+
+	// Conectar al servidor
+	client, err := ssh.Dial("tcp", ip+":22", config)
+	if err != nil {
+		return fmt.Errorf("fallo al conectarse al servidor %s: %w", ip, err)
+	}
+	defer client.Close()
+
+	fmt.Printf("Conectado al servidor con la IP: %s\n", ip)
+
+	// Crear una sesión SSH
+	session, err := client.NewSession()
+	if err != nil {
+		return fmt.Errorf("fallo al crear una sesión SSH: %w", err)
+	}
+	defer session.Close()
+
+	// Comando curl que se ejecutará en el servidor remoto
+	curlCommand := fmt.Sprintf(
+		"curl -X POST http://10.115.43.26:8181/api/mhs/configure_pps_queue_size/%s/%s -H 'Content-Type: application/json' -H 'cache-control: no-cache'",
+		ppsNumber, newQueue,
+	)
+
+	// Ejecuta el comando curl
+	output, err := session.CombinedOutput(curlCommand)
+	if err != nil {
+		return fmt.Errorf("fallo al ejecutar el comando curl: %w", err)
+	}
+
+	fmt.Printf("Resultado del servidor %s: %s\n", ip, output)
+	return nil
+}
+
 func ConexionSSH(user, password, ip, command string) error {
 	config := &ssh.ClientConfig{
 		User: user,
