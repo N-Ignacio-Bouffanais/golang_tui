@@ -148,7 +148,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							"17": 4,
 						}
 
-						err := sshclient.ExecuteDefaultQueuesWithExceptions(cfg.SSHUser, cfg.PASSWORD, cfg.SBS_STAGING, specificQueues)
+						err := sshclient.ExecuteDefaultQueuesWithExceptions(cfg.SSHUser, cfg.SBS_PASSWORD, cfg.SBS_CORE, specificQueues)
 						if err != nil {
 							fmt.Printf("Error al configurar las colas de PPS: %v\n", err)
 						}
@@ -180,7 +180,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// Configuración de conexión y ejecución del comando curl remoto
 				cfg := config.LoadConfig()
-				err := sshclient.ExecuteRemoteCurl(cfg.SSHUser, cfg.PASSWORD, cfg.SBS_STAGING, m.ppsNumber, m.newQueue)
+				err := sshclient.ExecuteRemoteCurl(cfg.SSHUser, cfg.SBS_PASSWORD, cfg.SBS_CORE, m.ppsNumber, m.newQueue)
 				if err != nil {
 					fmt.Printf("Error al ejecutar el comando curl remoto: %v\n", err)
 				}
