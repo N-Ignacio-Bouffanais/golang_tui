@@ -90,30 +90,91 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				switch m.choice {
 				case "Limpiar cashe de los servidores FLR":
-					fmt.Println("Limpiando caché de los servidores FLR...")
-					sshclient.ClearCacheOnServersFLR()
+					m.step = 5
+					go func() {
+						sshclient.ClearCacheOnServersFLR()
+						m.step = 0
+						tea.NewProgram(m).Send(tea.WindowSizeMsg{})
+					}()
+					return m, nil
+
 				case "Limpiar cashe de los servidores SBS":
-					fmt.Println("Limpiando caché de los servidores SBS...")
-					sshclient.ClearCacheOnServersSBS()
-					sshclient.ClearCacheOnStaging()
-					sshclient.ClearCacheSbs3()
+					m.step = 6
+					go func() {
+						sshclient.ClearCacheOnServersSBS()
+						sshclient.ClearCacheOnStaging()
+						sshclient.ClearCacheSbs3()
+						m.step = 0
+						tea.NewProgram(m).Send(tea.WindowSizeMsg{})
+					}()
+					return m, nil
+
 				case "Comprobar que los servidores esten corriendo":
-					fmt.Println("Realizando un ping a los servidores...")
-					utils.PingServers()
+					m.step = 4
+					go func() {
+						results := utils.PingServers()
+
+						// Procesar resultados conforme se reciben
+						for result := range results {
+							fmt.Println(result) // Imprime cada resultado en tiempo real
+						}
+
+						// Reiniciar estado y regresar al menú inicial
+						m.step = 0
+						tea.NewProgram(m).Send(tea.WindowSizeMsg{})
+					}()
+					return m, nil
+
 				case "Cambiar colas de pps":
 					m.step = 1
 					m.inputField = "" // Resetea el campo de entrada
 					m.collectingPPS = true
+				case "Largo de colas default":
+					fmt.Println("Configurando las colas de las PPS con valores predeterminados y específicos...")
+
+					// Cambiar el paso a 3 para mostrar el mensaje de estado
+					m.step = 3
+
+					// Ejecutar la configuración en un goroutine para no bloquear la interfaz
+					go func() {
+						cfg := config.LoadConfig()
+						// Mapa con las colas y sus valores específicos
+						specificQueues := map[string]int{
+							"3":  7,
+							"4":  7,
+							"12": 4,
+							"15": 7,
+							"16": 7,
+							"17": 4,
+						}
+
+						err := sshclient.ExecuteDefaultQueuesWithExceptions(cfg.SSHUser, cfg.PASSWORD, cfg.SBS_STAGING, specificQueues)
+						if err != nil {
+							fmt.Printf("Error al configurar las colas de PPS: %v\n", err)
+						}
+
+						// Reiniciar estado y regresar al menú inicial
+						m.step = 0
+						m.ppsNumber = ""
+						m.newQueue = ""
+						m.inputField = ""
+						m.collectingPPS = false
+						m.collectingQ = false
+						m.choice = ""
+
+						// Actualizar la interfaz de usuario para volver al menú inicial
+						tea.NewProgram(m).Send(tea.WindowSizeMsg{})
+					}()
+					return m, nil
+
 				}
 			} else if m.collectingPPS {
-				// Confirmamos el número de PPS
 				m.ppsNumber = m.inputField
 				m.inputField = "" // Resetea el campo de entrada
 				m.collectingPPS = false
 				m.collectingQ = true
 				m.step = 2
 			} else if m.collectingQ {
-				// Confirmamos el número de la nueva cola
 				m.newQueue = m.inputField
 				m.collectingQ = false
 
@@ -123,7 +184,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if err != nil {
 					fmt.Printf("Error al ejecutar el comando curl remoto: %v\n", err)
 				}
-				return m, tea.Quit
+				// Reiniciar estado y regresar al menú inicial
+				m.step = 0
+				m.ppsNumber = ""
+				m.newQueue = ""
+				m.inputField = ""
+				m.collectingPPS = false
+				m.collectingQ = false
+				m.choice = ""
+
+				// Regresa al menú inicial
+				return m, nil
 			}
 
 		case keypress == "backspace":
@@ -145,13 +216,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) View() string {
 	if m.quitting {
-		return quitTextStyle.Render("Que tengas un buen turno maquina!")
+		return quitTextStyle.Render("Que tengas un buen turno maquina!!!")
 	}
 	switch m.step {
 	case 1:
-		return titleStyle.Render("Que pps necesita cambiar?") + "\n" + m.inputField
+		return titleStyle.Render("Que pps necesitas cambiar?") + "\n" + m.inputField
 	case 2:
 		return titleStyle.Render(fmt.Sprintf("Ingrese la nueva cola de la pps %s:", m.ppsNumber)) + "\n" + m.inputField
+	case 3:
+		return titleStyle.Render("Configurando las pps en modo default...") + "\n"
+	case 4:
+		return titleStyle.Render("Realizando un ping a cada servidor...") + "\n"
+	case 5:
+		return titleStyle.Render("Limpiando memorias FLR...") + "\n"
+	case 6:
+		return titleStyle.Render("Limpiando memorias SBS...") + "\n"
 	default:
 		return "\n" + m.list.View()
 	}
@@ -163,6 +242,7 @@ func main() {
 		item("Limpiar cashe de los servidores SBS"),
 		item("Comprobar que los servidores esten corriendo"),
 		item("Cambiar colas de pps"),
+		item("Largo de colas default"),
 		//item("Cambiar sector preference"),
 	}
 

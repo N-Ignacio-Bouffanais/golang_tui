@@ -45,7 +45,8 @@ func pingServer(ip string, wg *sync.WaitGroup, results chan<- string) {
 }
 
 // PingServers ejecuta pings a todas las IPs en paralelo y muestra los resultados.
-func PingServers() {
+// PingServers ejecuta pings a todas las IPs en paralelo y devuelve el canal de resultados.
+func PingServers() <-chan string {
 	cfg := config.LoadConfig()
 	serversIP := ServersIP{
 		cfg.SBS_PUPPET,
@@ -79,10 +80,7 @@ func PingServers() {
 		close(results)
 	}()
 
-	// Recoge y muestra los resultados de las goroutines
-	for result := range results {
-		fmt.Println(result)
-	}
+	return results
 }
 
 func ClearConsole() {

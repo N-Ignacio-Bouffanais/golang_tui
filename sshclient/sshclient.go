@@ -8,6 +8,64 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+func ExecuteDefaultQueuesWithExceptions(user, password, ip string, specificQueues map[string]int) error {
+	// Configuración de la conexión SSH
+	config := &ssh.ClientConfig{
+		User: user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // Para desarrollo, no usar en producción
+		Timeout:         5 * time.Second,
+	}
+
+	// Conectar al servidor
+	client, err := ssh.Dial("tcp", ip+":22", config)
+	if err != nil {
+		return fmt.Errorf("fallo al conectarse al servidor %s: %w", ip, err)
+	}
+	defer client.Close()
+
+	fmt.Printf("Conectado al servidor con la IP: %s\n", ip)
+
+	// pps que van a establecerse por defecto con cola 5
+	defaultQueueValue := 5
+
+	// Lista de todas las colas (por ejemplo, PPS 1 a PPS 10)
+	pps := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17"}
+
+	for _, i := range pps {
+		value, isSpecific := specificQueues[i]
+		if !isSpecific {
+			value = defaultQueueValue
+		}
+
+		// Crear una nueva sesión SSH para cada comando
+		session, err := client.NewSession()
+		if err != nil {
+			fmt.Printf("Fallo al crear una sesión SSH para la pps %s: %v\n", i, err)
+			continue
+		}
+		curlCommand := fmt.Sprintf(
+			"curl -X POST http://10.115.43.26:8181/api/mhs/configure_pps_queue_size/%s/%d -H 'Content-Type: application/json' -H 'cache-control: no-cache'",
+			i, value,
+		)
+
+		// Ejecuta el comando en el servidor remoto
+		output, err := session.CombinedOutput(curlCommand)
+		session.Close() // Cierra la sesión después de cada comando
+
+		if err != nil {
+			fmt.Printf("Error al configurar la pps %s: %v\n", i, err)
+			continue // Continúa con la siguiente pps si hay un error
+		}
+
+		fmt.Printf("Resultado para la pps %s: %s\n", i, output)
+	}
+
+	return nil
+}
+
 func ExecuteRemoteCurl(user, password, ip, ppsNumber, newQueue string) error {
 	// Configuración de la conexión SSH
 	config := &ssh.ClientConfig{
